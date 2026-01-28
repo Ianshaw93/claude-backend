@@ -13,6 +13,9 @@ RUN pip install -r requirements.txt
 WORKDIR /app
 COPY . .
 
+# Create agent directories structure in /data (Railway volume)
+RUN mkdir -p /data/agents /data/logs /data/sessions /data/files
+
 # Start the FastAPI server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
