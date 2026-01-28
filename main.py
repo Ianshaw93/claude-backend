@@ -42,6 +42,7 @@ SESSIONS_DIR = DATA_DIR / "sessions"
 FILES_DIR = DATA_DIR / "files"
 LOGS_DIR = DATA_DIR / "logs"
 AGENTS_DIR = DATA_DIR / "agents"
+REPOS_DIR = DATA_DIR / "repos"
 
 # Ensure data directories exist
 DATA_DIR.mkdir(exist_ok=True)
@@ -49,6 +50,7 @@ SESSIONS_DIR.mkdir(exist_ok=True)
 FILES_DIR.mkdir(exist_ok=True)
 LOGS_DIR.mkdir(exist_ok=True)
 AGENTS_DIR.mkdir(exist_ok=True)
+REPOS_DIR.mkdir(exist_ok=True)
 
 # Global task status tracking
 TASKS_STATUS: Dict[str, Dict] = {}
@@ -57,6 +59,7 @@ TASKS_STATUS: Dict[str, Dict] = {}
 class Task(BaseModel):
     command: str
     agent_id: Optional[str] = None
+    working_dir: Optional[str] = None  # Path to repository (e.g., "/data/repos/speed_to_lead")
 
 class RunAgentsRequest(BaseModel):
     tasks: List[Task]
@@ -83,6 +86,7 @@ async def run_agent(task: Task, task_id: str) -> Dict:
         "status": "running",
         "agent_id": agent_id,
         "command": task.command,
+        "working_dir": task.working_dir,
         "started_at": datetime.now().isoformat(),
         "log_file": str(log_file)
     }
@@ -98,6 +102,7 @@ async def run_agent(task: Task, task_id: str) -> Dict:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            cwd=task.working_dir,  # Run in specified repo directory (None = inherit cwd)
             shell=True
         )
         
@@ -109,6 +114,7 @@ async def run_agent(task: Task, task_id: str) -> Dict:
             f.write(f"=== Agent: {agent_id} ===\n")
             f.write(f"=== Task ID: {task_id} ===\n")
             f.write(f"=== Command: {task.command} ===\n")
+            f.write(f"=== Working Dir: {task.working_dir or 'default'} ===\n")
             f.write(f"=== Started: {TASKS_STATUS[task_id]['started_at']} ===\n\n")
             f.write("=== STDOUT ===\n")
             f.write(stdout.decode('utf-8', errors='replace'))
@@ -304,6 +310,13 @@ async def list_files():
     """List all files in the persistent storage"""
     files = [f.name for f in FILES_DIR.iterdir() if f.is_file()]
     return {"files": files}
+
+
+@app.get("/repos")
+async def list_repos():
+    """List all cloned repositories"""
+    repos = [d.name for d in REPOS_DIR.iterdir() if d.is_dir()]
+    return {"repos": repos, "repos_dir": str(REPOS_DIR)}
 
 
 # ==================== SLACK INTEGRATION ====================
