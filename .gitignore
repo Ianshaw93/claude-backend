@@ -9,3 +9,6 @@ venv/
 .vscode/
 *.log
 .DS_Store
+.claude/
+SLACK_ENV_VARIABLES.md
+SLACK_INTEGRATION_INVESTIGATION.md
