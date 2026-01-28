@@ -12,6 +12,7 @@ import hmac
 import hashlib
 import time
 import httpx
+import base64
 
 app = FastAPI()
 
@@ -24,6 +25,19 @@ PROCESSED_EVENTS: set = set()
 
 # Persistent data directory (mounted Railway volume)
 DATA_DIR = Path("/data")
+
+# Write Claude credentials from env var if present
+CLAUDE_CREDENTIALS_B64 = os.getenv("CLAUDE_CREDENTIALS_B64")
+if CLAUDE_CREDENTIALS_B64:
+    CLAUDE_CONFIG_DIR = DATA_DIR / "claude-config"
+    CLAUDE_CONFIG_DIR.mkdir(exist_ok=True)
+    creds_file = CLAUDE_CONFIG_DIR / ".credentials.json"
+    try:
+        creds_data = base64.b64decode(CLAUDE_CREDENTIALS_B64)
+        creds_file.write_bytes(creds_data)
+        print(f"Wrote Claude credentials to {creds_file}")
+    except Exception as e:
+        print(f"Failed to write Claude credentials: {e}")
 SESSIONS_DIR = DATA_DIR / "sessions"
 FILES_DIR = DATA_DIR / "files"
 LOGS_DIR = DATA_DIR / "logs"
@@ -52,13 +66,14 @@ async def run_agent(task: Task, task_id: str) -> Dict:
     # Generate unique agent ID if not provided
     agent_id = task.agent_id or f"agent_{task_id}"
     
-    # Create isolated config directory for this agent
-    agent_config_dir = AGENTS_DIR / agent_id
-    agent_config_dir.mkdir(exist_ok=True)
-    
-    # Set unique CLAUDE_CONFIG_DIR environment variable
+    # Use shared config dir with credentials if available, otherwise isolated
     env = os.environ.copy()
-    env["CLAUDE_CONFIG_DIR"] = str(agent_config_dir)
+    if CLAUDE_CREDENTIALS_B64:
+        env["CLAUDE_CONFIG_DIR"] = str(DATA_DIR / "claude-config")
+    else:
+        agent_config_dir = AGENTS_DIR / agent_id
+        agent_config_dir.mkdir(exist_ok=True)
+        env["CLAUDE_CONFIG_DIR"] = str(agent_config_dir)
     
     # Create unique log file for this agent
     log_file = LOGS_DIR / f"{agent_id}_{task_id}.log"
